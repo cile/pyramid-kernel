@@ -28,6 +28,8 @@
  */
 
 #ifndef __MSM_ROTATOR_H__
+#define __MSM_ROTATOR_H__
+
 #ifdef CONFIG_MSM_MDP40
 
 #include <linux/types.h>
@@ -79,4 +81,3 @@ struct msm_rotator_platform_data {
 };
 #endif
 #endif
-
