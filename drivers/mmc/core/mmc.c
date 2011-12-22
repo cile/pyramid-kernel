@@ -12,10 +12,10 @@
 
 #include <linux/err.h>
 #include <linux/slab.h>
-
 #include <linux/mmc/host.h>
 #include <linux/mmc/card.h>
 #include <linux/mmc/mmc.h>
+#include <linux/kthread.h>
 
 #include "core.h"
 #include "bus.h"
@@ -122,9 +122,20 @@ static int mmc_decode_csd(struct mmc_card *card)
 	 * v1.2 has extra information in bits 15, 11 and 10.
 	 */
 	csd_struct = UNSTUFF_BITS(resp, 126, 2);
-	if (csd_struct != 1 && csd_struct != 2) {
+#if defined(CONFIG_ARCH_MSM7X30) || defined(CONFIG_ARCH_MSM8X60)
+	/* for eMMC spec v4.4, csd_struct value will be 3		*/
+	/* for eMMC spec v4.1-v4.3 csd struct value will be 2	*/
+	/* currently we don't support csd_struct version No. 1.0	*/
+	if (csd_struct == 0) {
 		printk(KERN_ERR "%s: unrecognised CSD structure version %d\n",
 			mmc_hostname(card->host), csd_struct);
+#else
+	/* For SanDisk iNAND, after comparing 1.3 with 1.2, I think	*/
+	/* 1.3 is compatible with 1.2.					*/
+	if (csd_struct != 1 && csd_struct != 2 && csd_struct != 3) {
+		printk(KERN_ERR "%s: unrecognised CSD structure version 1.%d\n",
+			mmc_hostname(card->host), csd_struct);
+#endif
 		return -EINVAL;
 	}
 
@@ -207,11 +218,22 @@ static int mmc_read_ext_csd(struct mmc_card *card)
 		goto out;
 	}
 
-	card->ext_csd.rev = ext_csd[EXT_CSD_REV];
-	if (card->ext_csd.rev > 5) {
+	/* Version is coded in the CSD_STRUCTURE byte in the EXT_CSD register */
+	if (card->csd.structure == 3) {
+		int ext_csd_struct = ext_csd[EXT_CSD_STRUCTURE];
+		if (ext_csd_struct > 2) {
 		printk(KERN_ERR "%s: unrecognised EXT_CSD structure "
 			"version %d\n", mmc_hostname(card->host),
-			card->ext_csd.rev);
+					ext_csd_struct);
+			err = -EINVAL;
+			goto out;
+		}
+	}
+
+	card->ext_csd.rev = ext_csd[EXT_CSD_REV];
+	if (card->ext_csd.rev > 5) {
+		printk(KERN_ERR "%s: unrecognised EXT_CSD revision %d\n",
+			mmc_hostname(card->host), card->ext_csd.rev);
 		err = -EINVAL;
 		goto out;
 	}
@@ -222,11 +244,24 @@ static int mmc_read_ext_csd(struct mmc_card *card)
 			ext_csd[EXT_CSD_SEC_CNT + 1] << 8 |
 			ext_csd[EXT_CSD_SEC_CNT + 2] << 16 |
 			ext_csd[EXT_CSD_SEC_CNT + 3] << 24;
-		if (card->ext_csd.sectors)
-			mmc_card_set_blockaddr(card);
+		/* for HTC config, we don't exec following code */
+		/* original code: if (card->ext_csd.sectors) { */
+		if (false) {
+			unsigned boot_sectors;
+			/* size is in 256K chunks, i.e. 512 sectors each */
+			boot_sectors = ext_csd[EXT_CSD_BOOT_SIZE_MULTI] * 512;
+			card->ext_csd.sectors -= boot_sectors;
+		}
 	}
 
 	switch (ext_csd[EXT_CSD_CARD_TYPE] & EXT_CSD_CARD_TYPE_MASK) {
+#if defined(CONFIG_ARCH_MSM7X30) || defined(CONFIG_ARCH_MSM8X60)
+	/* for eMMC v4.4 there are two additional card type defined */
+	/* they are : 	High-Speed Dual Data Rate Multimedia Card @ 52Mhz - 1.8v or 3v IO */
+	/* High-Speed Dual Data Rate Multimedia Card @ 52Mhz - 1.2v IO 	*/
+	case EXT_CSD_CARD_TYPE_52 | EXT_CSD_CARD_TYPE_26 | EXT_CSD_CARD_TYPE_DDR_HV | EXT_CSD_CARD_TYPE_DDR_LV:
+	case EXT_CSD_CARD_TYPE_52 | EXT_CSD_CARD_TYPE_26 | EXT_CSD_CARD_TYPE_DDR_HV:
+#endif
 	case EXT_CSD_CARD_TYPE_52 | EXT_CSD_CARD_TYPE_26:
 		card->ext_csd.hs_max_dtr = 52000000;
 		break;
@@ -306,6 +341,7 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 	int err;
 	u32 cid[4];
 	unsigned int max_dtr;
+	u32 rocr;
 
 	BUG_ON(!host);
 	WARN_ON(!host->claimed);
@@ -319,7 +355,7 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 	mmc_go_idle(host);
 
 	/* The extra bit indicates that we support high capacity */
-	err = mmc_send_op_cond(host, ocr | (1 << 30), NULL);
+	err = mmc_send_op_cond(host, ocr | MMC_CARD_SECTOR_ADDR, &rocr);
 	if (err)
 		goto err;
 
@@ -407,6 +443,9 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 		err = mmc_read_ext_csd(card);
 		if (err)
 			goto free_card;
+
+		if (card->ext_csd.sectors && (rocr & MMC_CARD_SECTOR_ADDR))
+			mmc_card_set_blockaddr(card);
 	}
 
 	/*
@@ -457,7 +496,6 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 			ext_csd_bit = EXT_CSD_BUS_WIDTH_4;
 			bus_width = MMC_BUS_WIDTH_4;
 		}
-
 		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
 				 EXT_CSD_BUS_WIDTH, ext_csd_bit);
 
@@ -473,6 +511,27 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 			mmc_set_bus_width(card->host, bus_width);
 		}
 	}
+
+	/*
+	  * Set  erase group  4194304 secotors mean 2G
+	  */
+
+	if (card->ext_csd.rev >= 3 && card->ext_csd.rev <= 5) {
+		if (card->ext_csd.sectors > 4194304) {
+			printk(KERN_ERR "card->ext_csd.sectors =%d\n", card->ext_csd.sectors);
+			err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
+				EXT_CSD_ERASE_GRP_DEF, 1);
+			if (err && err != -EBADMSG)
+				goto free_card;
+
+			if (err) {
+				printk(KERN_WARNING "%s: set erase def failed\n",
+					mmc_hostname(card->host));
+				err = 0;
+			}
+		}
+	}
+
 
 	if (!oldcard)
 		host->card = card;
@@ -602,6 +661,25 @@ static int mmc_awake(struct mmc_host *host)
 	return err;
 }
 
+#ifdef CONFIG_MMC_UNSAFE_RESUME
+
+static const struct mmc_bus_ops mmc_ops = {
+	.awake = mmc_awake,
+	.sleep = mmc_sleep,
+	.remove = mmc_remove,
+	.detect = mmc_detect,
+	.suspend = mmc_suspend,
+	.resume = mmc_resume,
+	.power_restore = mmc_power_restore,
+};
+
+static void mmc_attach_bus_ops(struct mmc_host *host)
+{
+	mmc_attach_bus(host, &mmc_ops);
+}
+
+#else
+
 static const struct mmc_bus_ops mmc_ops = {
 	.awake = mmc_awake,
 	.sleep = mmc_sleep,
@@ -632,6 +710,8 @@ static void mmc_attach_bus_ops(struct mmc_host *host)
 		bus_ops = &mmc_ops;
 	mmc_attach_bus(host, bus_ops);
 }
+
+#endif
 
 /*
  * Starting point for MMC card init.

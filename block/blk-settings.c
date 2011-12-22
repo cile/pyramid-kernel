@@ -108,7 +108,7 @@ void blk_set_default_limits(struct queue_limits *lim)
 	lim->alignment_offset = 0;
 	lim->io_opt = 0;
 	lim->misaligned = 0;
-	lim->cluster = 1;
+	lim->no_cluster = 0;
 }
 EXPORT_SYMBOL(blk_set_default_limits);
 
@@ -211,6 +211,32 @@ void blk_queue_bounce_limit(struct request_queue *q, u64 dma_mask)
 EXPORT_SYMBOL(blk_queue_bounce_limit);
 
 /**
+ * blk_queue_max_sectors - set max sectors for a request for this queue
+ * @q:  the request queue for the device
+ * @max_sectors:  max sectors in the usual 512b unit
+ *
+ * Description:
+ *    Enables a low level driver to set an upper limit on the size of
+ *    received requests.
+ **/
+void blk_queue_max_sectors(struct request_queue *q, unsigned int max_sectors)
+{
+	if ((max_sectors << 9) < PAGE_CACHE_SIZE) {
+		max_sectors = 1 << (PAGE_CACHE_SHIFT - 9);
+		printk(KERN_INFO "%s: set to minimum %d\n",
+		       __func__, max_sectors);
+	}
+
+	if (BLK_DEF_MAX_SECTORS > max_sectors)
+		q->limits.max_hw_sectors = q->limits.max_sectors = max_sectors;
+	else {
+		q->limits.max_sectors = BLK_DEF_MAX_SECTORS;
+		q->limits.max_hw_sectors = max_sectors;
+	}
+}
+EXPORT_SYMBOL(blk_queue_max_sectors);
+
+/**
  * blk_queue_max_hw_sectors - set max sectors for a request for this queue
  * @q:  the request queue for the device
  * @max_hw_sectors:  max hardware sectors in the usual 512b unit
@@ -251,6 +277,54 @@ void blk_queue_max_discard_sectors(struct request_queue *q,
 	q->limits.max_discard_sectors = max_discard_sectors;
 }
 EXPORT_SYMBOL(blk_queue_max_discard_sectors);
+
+/**
+ * blk_queue_max_phys_segments - set max phys segments for a request for this queue
+ * @q:  the request queue for the device
+ * @max_segments:  max number of segments
+ *
+ * Description:
+ *    Enables a low level driver to set an upper limit on the number of
+ *    physical data segments in a request.  This would be the largest sized
+ *    scatter list the driver could handle.
+ **/
+void blk_queue_max_phys_segments(struct request_queue *q,
+				 unsigned short max_segments)
+{
+	if (!max_segments) {
+		max_segments = 1;
+		printk(KERN_INFO "%s: set to minimum %d\n",
+		       __func__, max_segments);
+	}
+
+	q->limits.max_phys_segments = max_segments;
+}
+EXPORT_SYMBOL(blk_queue_max_phys_segments);
+
+/**
+ * blk_queue_max_hw_segments - set max hw segments for a request for this queue
+ * @q:  the request queue for the device
+ * @max_segments:  max number of segments
+ *
+ * Description:
+ *    Enables a low level driver to set an upper limit on the number of
+ *    hw data segments in a request.  This would be the largest number of
+ *    address/length pairs the host adapter can actually give at once
+ *    to the device.
+ **/
+void blk_queue_max_hw_segments(struct request_queue *q,
+			       unsigned short max_segments)
+{
+	if (!max_segments) {
+		max_segments = 1;
+		printk(KERN_INFO "%s: set to minimum %d\n",
+		       __func__, max_segments);
+	}
+
+	q->limits.max_hw_segments = max_segments;
+}
+EXPORT_SYMBOL(blk_queue_max_hw_segments);
+
 
 /**
  * blk_queue_max_segments - set max hw segments for a request for this queue
@@ -451,6 +525,15 @@ EXPORT_SYMBOL(blk_queue_io_opt);
 void blk_queue_stack_limits(struct request_queue *t, struct request_queue *b)
 {
 	blk_stack_limits(&t->limits, &b->limits, 0);
+
+	if (!t->queue_lock)
+		WARN_ON_ONCE(1);
+	else if (!test_bit(QUEUE_FLAG_CLUSTER, &b->queue_flags)) {
+		unsigned long flags;
+		spin_lock_irqsave(t->queue_lock, flags);
+		queue_flag_clear(QUEUE_FLAG_CLUSTER, t);
+		spin_unlock_irqrestore(t->queue_lock, flags);
+	}
 }
 EXPORT_SYMBOL(blk_queue_stack_limits);
 
@@ -521,7 +604,7 @@ int blk_stack_limits(struct queue_limits *t, struct queue_limits *b,
 	t->io_min = max(t->io_min, b->io_min);
 	t->io_opt = lcm(t->io_opt, b->io_opt);
 
-	t->cluster &= b->cluster;
+	t->no_cluster |= b->no_cluster;
 	t->discard_zeroes_data &= b->discard_zeroes_data;
 
 	/* Physical block size a multiple of the logical block size? */
@@ -617,6 +700,7 @@ void disk_stack_limits(struct gendisk *disk, struct block_device *bdev,
 		       sector_t offset)
 {
 	struct request_queue *t = disk->queue;
+	struct request_queue *b = bdev_get_queue(bdev);
 
 	if (bdev_stack_limits(&t->limits, bdev, offset >> 9) < 0) {
 		char top[BDEVNAME_SIZE], bottom[BDEVNAME_SIZE];
@@ -626,6 +710,17 @@ void disk_stack_limits(struct gendisk *disk, struct block_device *bdev,
 
 		printk(KERN_NOTICE "%s: Warning: Device %s is misaligned\n",
 		       top, bottom);
+	}
+
+	if (!t->queue_lock)
+		WARN_ON_ONCE(1);
+	else if (!test_bit(QUEUE_FLAG_CLUSTER, &b->queue_flags)) {
+		unsigned long flags;
+
+		spin_lock_irqsave(t->queue_lock, flags);
+		if (!test_bit(QUEUE_FLAG_CLUSTER, &b->queue_flags))
+			queue_flag_clear(QUEUE_FLAG_CLUSTER, t);
+		spin_unlock_irqrestore(t->queue_lock, flags);
 	}
 }
 EXPORT_SYMBOL(disk_stack_limits);

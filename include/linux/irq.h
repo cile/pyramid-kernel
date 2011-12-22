@@ -209,6 +209,16 @@ struct irq_desc {
 	const char		*name;
 } ____cacheline_internodealigned_in_smp;
 
+#ifdef CONFIG_ARCH_MSM8X60
+struct _handle_irq {
+	unsigned int L_irq;	/* Last serving irq */
+	unsigned int S_irq;	/* Serving irq */
+};
+
+extern struct _handle_irq *handle_irq;
+extern int *spin_locking_flag;
+#endif
+
 extern void arch_init_copy_chip_data(struct irq_desc *old_desc,
 					struct irq_desc *desc, int node);
 extern void arch_free_chip_data(struct irq_desc *old_desc, struct irq_desc *desc);

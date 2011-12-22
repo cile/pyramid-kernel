@@ -21,6 +21,9 @@
 #include <asm/byteorder.h>
 #include <asm/bug.h>
 
+/* HTC: SSD log rule support */
+#include <linux/htc_drv_prefix.h>
+
 extern const char linux_banner[];
 extern const char linux_proc_banner[];
 
@@ -389,6 +392,16 @@ extern int hex_to_bin(char ch);
         printk(KERN_CRIT pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_err(fmt, ...) \
         printk(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
+#define pr_aud_fmt(fmt) "[AUD] " KBUILD_MODNAME ": " fmt
+#define pr_aud_fmt1(fmt) "[AUD]" fmt
+#define pr_aud_err(fmt, ...) \
+			printk(KERN_ERR pr_aud_fmt(fmt), ##__VA_ARGS__)
+#define pr_aud_err1(fmt, ...) \
+			printk(KERN_ERR pr_aud_fmt1(fmt), ##__VA_ARGS__)
+#define pr_aud_info(fmt, ...) \
+			printk(KERN_INFO pr_aud_fmt(fmt), ##__VA_ARGS__)
+#define pr_aud_info1(fmt, ...) \
+			printk(KERN_INFO pr_aud_fmt1(fmt), ##__VA_ARGS__)
 #define pr_warning(fmt, ...) \
         printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
 #define pr_warn pr_warning

@@ -243,10 +243,15 @@ int snd_soc_codec_set_cache_io(struct snd_soc_codec *codec,
 			       int addr_bits, int data_bits,
 			       enum snd_soc_control_type control);
 
+#ifdef CONFIG_PM
+int snd_soc_suspend_device(struct device *dev);
+int snd_soc_resume_device(struct device *dev);
+#endif
+
 /* pcm <-> DAI connect */
 void snd_soc_free_pcms(struct snd_soc_device *socdev);
 int snd_soc_new_pcms(struct snd_soc_device *socdev, int idx, const char *xid);
-
+int snd_soc_init_card(struct snd_soc_device *socdev);
 /* Utility functions to get clock rates from various things */
 int snd_soc_calc_frame_size(int sample_size, int channels, int tdm_slots);
 int snd_soc_params_to_frame_size(struct snd_pcm_hw_params *params);
@@ -561,6 +566,7 @@ struct snd_soc_card {
 struct snd_soc_device {
 	struct device *dev;
 	struct snd_soc_card *card;
+	struct snd_soc_codec *codec;
 	struct snd_soc_codec_device *codec_dev;
 	void *codec_data;
 };

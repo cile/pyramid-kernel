@@ -155,10 +155,14 @@ static void fat_cache_add(struct inode *inode, struct fat_cache_id *new)
 			cache = fat_cache_merge(inode, new);
 			if (cache != NULL) {
 				MSDOS_I(inode)->nr_caches--;
+				if (tmp)
 				fat_cache_free(tmp);
 				goto out_update_lru;
 			}
+			if (tmp)
 			cache = tmp;
+			else
+				goto out;
 		} else {
 			struct list_head *p = MSDOS_I(inode)->cache_lru.prev;
 			cache = list_entry(p, struct fat_cache, cache_list);

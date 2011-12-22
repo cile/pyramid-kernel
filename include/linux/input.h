@@ -693,6 +693,8 @@ struct input_absinfo {
 #define ABS_TOOL_WIDTH		0x1c
 #define ABS_VOLUME		0x20
 #define ABS_MISC		0x28
+#define ABS_MT_POSITION		0x2a	/* Group a set of X and Y */
+#define ABS_MT_AMPLITUDE	0x2b	/* Group a set of Z and W */
 
 #define ABS_MT_TOUCH_MAJOR	0x30	/* Major axis of touching ellipse */
 #define ABS_MT_TOUCH_MINOR	0x31	/* Minor axis (omit if circular) */
@@ -727,6 +729,7 @@ struct input_absinfo {
 #define SW_CAMERA_LENS_COVER	0x09  /* set = lens covered */
 #define SW_KEYPAD_SLIDE		0x0a  /* set = keypad slide out */
 #define SW_FRONT_PROXIMITY	0x0b  /* set = front proximity sensor active */
+#define SW_CAM			0x0e  /* set = 3D/Video mode for camera */
 #define SW_MAX			0x0f
 #define SW_CNT			(SW_MAX+1)
 

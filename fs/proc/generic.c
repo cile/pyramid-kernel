@@ -350,7 +350,7 @@ static unsigned int get_inode_number(void)
 	int error;
 
 retry:
-	if (ida_pre_get(&proc_inum_ida, GFP_KERNEL) == 0)
+	if (ida_pre_get(&proc_inum_ida, GFP_ATOMIC) == 0)
 		return 0;
 
 	spin_lock(&proc_inum_lock);
@@ -613,7 +613,7 @@ static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 
 	len = strlen(fn);
 
-	ent = kmalloc(sizeof(struct proc_dir_entry) + len + 1, GFP_KERNEL);
+	ent = kmalloc(sizeof(struct proc_dir_entry) + len + 1, GFP_ATOMIC);
 	if (!ent) goto out;
 
 	memset(ent, 0, sizeof(struct proc_dir_entry));

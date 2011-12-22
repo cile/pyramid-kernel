@@ -353,6 +353,9 @@ int proc_pid_status(struct seq_file *m, struct pid_namespace *ns,
 	task_cap(m, task);
 	task_cpus_allowed(m, task);
 	cpuset_task_status_allowed(m, task);
+#if defined(CONFIG_S390)
+	task_show_regs(m, task);
+#endif
 	task_context_switch_counts(m, task);
 	return 0;
 }
@@ -464,7 +467,7 @@ static int do_task_stat(struct seq_file *m, struct pid_namespace *ns,
 
 	seq_printf(m, "%d (%s) %c %d %d %d %d %d %u %lu \
 %lu %lu %lu %lu %lu %ld %ld %ld %ld %d 0 %llu %lu %ld %lu %lu %lu %lu %lu \
-%lu %lu %lu %lu %lu %lu %lu %lu %d %d %u %u %llu %lu %ld\n",
+%lu %lu %lu %lu %lu %lu %lu %lu %d %d %u %u %llu %lu %ld %llu\n",
 		pid_nr_ns(pid, ns),
 		tcomm,
 		state,
@@ -511,7 +514,14 @@ static int do_task_stat(struct seq_file *m, struct pid_namespace *ns,
 		task->policy,
 		(unsigned long long)delayacct_blkio_ticks(task),
 		cputime_to_clock_t(gtime),
-		cputime_to_clock_t(cgtime));
+		cputime_to_clock_t(cgtime),
+#ifdef CONFIG_SCHEDSTATS
+		nsec_to_clock_t(task->se.statistics.iowait_sum)
+#else
+		cputime64_to_clock_t(task->iowait)
+#endif
+	);
+
 	if (mm)
 		mmput(mm);
 	return 0;

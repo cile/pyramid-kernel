@@ -98,6 +98,12 @@ config IP_FIB_TRIE_STATS
 	  Keep track of statistics on structure of FIB TRIE table.
 	  Useful for testing and measuring TRIE performance.
 
+config LARGE_TCP_INITIAL_BUFFER
+	bool "TCP: initial TCP buffer size 5K:64K"
+	default n
+	help
+	 yes means TCP buffer size 5K
+
 config IP_MULTIPLE_TABLES
 	bool "IP: policy routing"
 	depends on IP_ADVANCED_ROUTER

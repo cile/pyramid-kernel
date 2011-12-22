@@ -777,6 +777,7 @@ long wb_do_writeback(struct bdi_writeback *wb, int force_wait)
  */
 int bdi_writeback_task(struct bdi_writeback *wb)
 {
+	struct backing_dev_info *bdi = wb->bdi;
 	unsigned long last_active = jiffies;
 	unsigned long wait_jiffies = -1UL;
 	long pages_written;
@@ -799,15 +800,17 @@ int bdi_writeback_task(struct bdi_writeback *wb)
 				break;
 		}
 
+		set_current_state(TASK_INTERRUPTIBLE);
+		if (!list_empty(&bdi->work_list) || kthread_should_stop()) {
+			__set_current_state(TASK_RUNNING);
+			continue;
+		}
+
 		if (dirty_writeback_interval) {
 			wait_jiffies = msecs_to_jiffies(dirty_writeback_interval * 10);
-			schedule_timeout_interruptible(wait_jiffies);
+			schedule_timeout(wait_jiffies);
 		} else {
-			set_current_state(TASK_INTERRUPTIBLE);
-			if (list_empty_careful(&wb->bdi->work_list) &&
-			    !kthread_should_stop())
 				schedule();
-			__set_current_state(TASK_RUNNING);
 		}
 
 		try_to_freeze();
@@ -910,7 +913,7 @@ void __mark_inode_dirty(struct inode *inode, int flags)
 	if ((inode->i_state & flags) == flags)
 		return;
 
-	if (unlikely(block_dump))
+	if (unlikely(block_dump > 1))
 		block_dump___mark_inode_dirty(inode);
 
 	spin_lock(&inode_lock);

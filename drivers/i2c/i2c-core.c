@@ -119,6 +119,8 @@ static int i2c_device_probe(struct device *dev)
 		client->driver = NULL;
 		i2c_set_clientdata(client, NULL);
 	}
+	pm_runtime_set_active(dev);
+
 	return status;
 }
 
@@ -369,7 +371,7 @@ struct i2c_client *i2c_verify_client(struct device *dev)
 }
 EXPORT_SYMBOL(i2c_verify_client);
 
-
+#if 0
 /* This is a permissive address validity check, I2C address map constraints
  * are purposedly not enforced, except for the general call address. */
 static int i2c_check_client_addr_validity(const struct i2c_client *client)
@@ -385,6 +387,7 @@ static int i2c_check_client_addr_validity(const struct i2c_client *client)
 	}
 	return 0;
 }
+#endif
 
 /* And this is a strict address validity check, used when probing. If a
  * device uses a reserved address, then it shouldn't be probed. 7-bit
@@ -461,7 +464,7 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 	client->irq = info->irq;
 
 	strlcpy(client->name, info->type, sizeof(client->name));
-
+#if 0
 	/* Check for address validity */
 	status = i2c_check_client_addr_validity(client);
 	if (status) {
@@ -469,7 +472,7 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 			client->flags & I2C_CLIENT_TEN ? 10 : 7, client->addr);
 		goto out_err_silent;
 	}
-
+#endif
 	/* Check for address business */
 	status = i2c_check_addr_busy(adap, client->addr);
 	if (status)
@@ -496,7 +499,7 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 out_err:
 	dev_err(&adap->dev, "Failed to register i2c client %s at 0x%02x "
 		"(%d)\n", client->name, client->addr, status);
-out_err_silent:
+/* out_err_silent: */
 	kfree(client);
 	return NULL;
 }
@@ -923,14 +926,6 @@ static int i2c_do_del_adapter(struct i2c_driver *driver,
 static int __unregister_client(struct device *dev, void *dummy)
 {
 	struct i2c_client *client = i2c_verify_client(dev);
-	if (client && strcmp(client->name, "dummy"))
-		i2c_unregister_device(client);
-	return 0;
-}
-
-static int __unregister_dummy(struct device *dev, void *dummy)
-{
-	struct i2c_client *client = i2c_verify_client(dev);
 	if (client)
 		i2c_unregister_device(client);
 	return 0;
@@ -985,12 +980,8 @@ int i2c_del_adapter(struct i2c_adapter *adap)
 	i2c_unlock_adapter(adap);
 
 	/* Detach any active clients. This can't fail, thus we do not
-	 * check the returned value. This is a two-pass process, because
-	 * we can't remove the dummy devices during the first pass: they
-	 * could have been instantiated by real devices wishing to clean
-	 * them up properly, so we give them a chance to do that first. */
+	   checking the returned value. */
 	res = device_for_each_child(&adap->dev, NULL, __unregister_client);
-	res = device_for_each_child(&adap->dev, NULL, __unregister_dummy);
 
 #ifdef CONFIG_I2C_COMPAT
 	class_compat_remove_link(i2c_adapter_compat_class, &adap->dev,

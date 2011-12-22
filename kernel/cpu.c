@@ -106,6 +106,7 @@ EXPORT_SYMBOL_GPL(put_online_cpus);
 static void cpu_hotplug_begin(void)
 {
 	cpu_hotplug.active_writer = current;
+	disable_hlt();
 
 	for (;;) {
 		mutex_lock(&cpu_hotplug.lock);
@@ -121,6 +122,7 @@ static void cpu_hotplug_done(void)
 {
 	cpu_hotplug.active_writer = NULL;
 	mutex_unlock(&cpu_hotplug.lock);
+	enable_hlt();
 }
 
 #else /* #if CONFIG_HOTPLUG_CPU */

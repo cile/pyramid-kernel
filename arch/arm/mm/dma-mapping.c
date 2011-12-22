@@ -404,18 +404,24 @@ EXPORT_SYMBOL(dma_free_coherent);
 void ___dma_single_cpu_to_dev(const void *kaddr, size_t size,
 	enum dma_data_direction dir)
 {
+#ifdef CONFIG_OUTER_CACHE
 	unsigned long paddr;
+#endif
 
+#ifdef CONFIG_OUTER_CACHE
 	BUG_ON(!virt_addr_valid(kaddr) || !virt_addr_valid(kaddr + size - 1));
+#endif
 
 	dmac_map_area(kaddr, size, dir);
 
+#ifdef CONFIG_OUTER_CACHE
 	paddr = __pa(kaddr);
 	if (dir == DMA_FROM_DEVICE) {
 		outer_inv_range(paddr, paddr + size);
 	} else {
 		outer_clean_range(paddr, paddr + size);
 	}
+#endif
 	/* FIXME: non-speculating: flush on bidirectional mappings? */
 }
 EXPORT_SYMBOL(___dma_single_cpu_to_dev);
@@ -423,6 +429,7 @@ EXPORT_SYMBOL(___dma_single_cpu_to_dev);
 void ___dma_single_dev_to_cpu(const void *kaddr, size_t size,
 	enum dma_data_direction dir)
 {
+#ifdef CONFIG_OUTER_CACHE
 	BUG_ON(!virt_addr_valid(kaddr) || !virt_addr_valid(kaddr + size - 1));
 
 	/* FIXME: non-speculating: not required */
@@ -431,7 +438,7 @@ void ___dma_single_dev_to_cpu(const void *kaddr, size_t size,
 		unsigned long paddr = __pa(kaddr);
 		outer_inv_range(paddr, paddr + size);
 	}
-
+#endif
 	dmac_unmap_area(kaddr, size, dir);
 }
 EXPORT_SYMBOL(___dma_single_dev_to_cpu);
@@ -508,6 +515,12 @@ void ___dma_page_dev_to_cpu(struct page *page, unsigned long off,
 		outer_inv_range(paddr, paddr + size);
 
 	dma_cache_maint_page(page, off, size, dir, dmac_unmap_area);
+
+	/*
+	 * Mark the D-cache clean for this page to avoid extra flushing.
+	 */
+	if (dir != DMA_TO_DEVICE && off == 0 && size >= PAGE_SIZE)
+		set_bit(PG_dcache_clean, &page->flags);
 }
 EXPORT_SYMBOL(___dma_page_dev_to_cpu);
 

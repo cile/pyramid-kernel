@@ -124,6 +124,9 @@
 #define USB_DEVICE_DEBUG_MODE		6	/* (special devices only) */
 
 #define USB_ENDPOINT_HALT		0	/* IN/OUT will STALL */
+#define OTG_STATUS_SELECTOR		0xF000
+#define THOST_REQ_POLL			2000    /* msec */
+#define HOST_REQUEST_FLAG		0
 
 
 /**
@@ -580,17 +583,19 @@ struct usb_qualifier_descriptor {
 
 /*-------------------------------------------------------------------------*/
 
-/* USB_DT_OTG (from OTG 1.0a supplement) */
+/* USB_DT_OTG (from OTG 2.0 supplement) */
 struct usb_otg_descriptor {
 	__u8  bLength;
 	__u8  bDescriptorType;
 
-	__u8  bmAttributes;	/* support for HNP, SRP, etc */
+	__u8  bmAttributes;	/* support for HNP, SRP, ADP, etc */
+	__le16 bcdOTG;
 } __attribute__ ((packed));
 
 /* from usb_otg_descriptor.bmAttributes */
 #define USB_OTG_SRP		(1 << 0)
 #define USB_OTG_HNP		(1 << 1)	/* swap host/device roles */
+#define USB_OTG_ADP		(1 << 2)	/* Attach Detection protocol */
 
 /*-------------------------------------------------------------------------*/
 

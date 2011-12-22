@@ -102,9 +102,6 @@ MODULE_PARM_DESC (ignore_oc, "ignore bogus hardware overcurrent indications");
 
 #define	INTR_MASK (STS_IAA | STS_FATAL | STS_PCD | STS_ERR | STS_INT)
 
-/* for ASPM quirk of ISOC on AMD SB800 */
-static struct pci_dev *amd_nb_dev;
-
 /*-------------------------------------------------------------------------*/
 
 #include "ehci.h"
@@ -423,6 +420,7 @@ static void ehci_shutdown(struct usb_hcd *hcd)
 	spin_unlock_irq(&ehci->lock);
 }
 
+#if 0
 static void ehci_port_power (struct ehci_hcd *ehci, int is_on)
 {
 	unsigned port;
@@ -440,6 +438,7 @@ static void ehci_port_power (struct ehci_hcd *ehci, int is_on)
 	ehci_readl(ehci, &ehci->regs->command);
 	msleep(20);
 }
+#endif
 
 /*-------------------------------------------------------------------------*/
 
@@ -504,11 +503,6 @@ static void ehci_stop (struct usb_hcd *hcd)
 	spin_unlock_irq (&ehci->lock);
 	ehci_mem_cleanup (ehci);
 
-	if (amd_nb_dev) {
-		pci_dev_put(amd_nb_dev);
-		amd_nb_dev = NULL;
-	}
-
 #ifdef	EHCI_STATS
 	ehci_dbg (ehci, "irq normal %ld err %ld reclaim %ld (lost %ld)\n",
 		ehci->stats.normal, ehci->stats.error, ehci->stats.reclaim,
@@ -544,8 +538,6 @@ static int ehci_init(struct usb_hcd *hcd)
 	ehci->iaa_watchdog.function = ehci_iaa_watchdog;
 	ehci->iaa_watchdog.data = (unsigned long) ehci;
 
-	hcc_params = ehci_readl(ehci, &ehci->caps->hcc_params);
-
 	/*
 	 * hw default: 1K periodic list heads, one per frame.
 	 * periodic_size can shrink by USBCMD update if hcc_params allows.
@@ -553,20 +545,11 @@ static int ehci_init(struct usb_hcd *hcd)
 	ehci->periodic_size = DEFAULT_I_TDPS;
 	INIT_LIST_HEAD(&ehci->cached_itd_list);
 	INIT_LIST_HEAD(&ehci->cached_sitd_list);
-
-	if (HCC_PGM_FRAMELISTLEN(hcc_params)) {
-		/* periodic schedule size can be smaller than default */
-		switch (EHCI_TUNE_FLS) {
-		case 0: ehci->periodic_size = 1024; break;
-		case 1: ehci->periodic_size = 512; break;
-		case 2: ehci->periodic_size = 256; break;
-		default:	BUG();
-		}
-	}
 	if ((retval = ehci_mem_init(ehci, GFP_KERNEL)) < 0)
 		return retval;
 
 	/* controllers may cache some of the periodic schedule ... */
+	hcc_params = ehci_readl(ehci, &ehci->caps->hcc_params);
 	if (HCC_ISOC_CACHE(hcc_params))		// full frame cache
 		ehci->i_thresh = 2 + 8;
 	else					// N microframes cached
@@ -615,6 +598,12 @@ static int ehci_init(struct usb_hcd *hcd)
 		/* periodic schedule size can be smaller than default */
 		temp &= ~(3 << 2);
 		temp |= (EHCI_TUNE_FLS << 2);
+		switch (EHCI_TUNE_FLS) {
+		case 0: ehci->periodic_size = 1024; break;
+		case 1: ehci->periodic_size = 512; break;
+		case 2: ehci->periodic_size = 256; break;
+		default:	BUG();
+		}
 	}
 	ehci->command = temp;
 
@@ -623,6 +612,7 @@ static int ehci_init(struct usb_hcd *hcd)
 	return 0;
 }
 
+#if 0
 /* start HC running; it's halted, ehci_init() has been run (once) */
 static int ehci_run (struct usb_hcd *hcd)
 {
@@ -713,6 +703,7 @@ static int ehci_run (struct usb_hcd *hcd)
 
 	return 0;
 }
+#endif
 
 /*-------------------------------------------------------------------------*/
 
@@ -1022,10 +1013,9 @@ rescan:
 				tmp && tmp != qh;
 				tmp = tmp->qh_next.qh)
 			continue;
-		/* periodic qh self-unlinks on empty, and a COMPLETING qh
-		 * may already be unlinked.
-		 */
-		if (tmp)
+		/* periodic qh self-unlinks on empty */
+		if (!tmp)
+			goto nogood;
 			unlink_async(ehci, qh);
 		/* FALL THROUGH */
 	case QH_STATE_UNLINK:		/* wait for hw to finish? */
@@ -1043,6 +1033,7 @@ idle_timeout:
 		}
 		/* else FALL THROUGH */
 	default:
+nogood:
 		/* caller was supposed to have unlinked any requests;
 		 * that's not our job.  just leak this memory.
 		 */
@@ -1057,6 +1048,7 @@ done:
 	return;
 }
 
+#if 0
 static void
 ehci_endpoint_reset(struct usb_hcd *hcd, struct usb_host_endpoint *ep)
 {
@@ -1097,6 +1089,7 @@ ehci_endpoint_reset(struct usb_hcd *hcd, struct usb_host_endpoint *ep)
 	}
 	spin_unlock_irqrestore(&ehci->lock, flags);
 }
+#endif
 
 static int ehci_get_frame (struct usb_hcd *hcd)
 {
@@ -1161,6 +1154,11 @@ MODULE_LICENSE ("GPL");
 #define	PLATFORM_DRIVER		ixp4xx_ehci_driver
 #endif
 
+#ifdef CONFIG_USB_EHCI_MSM
+#include "ehci-msm.c"
+#define PLATFORM_DRIVER		ehci_msm_driver
+#endif
+
 #ifdef CONFIG_USB_W90X900_EHCI
 #include "ehci-w90x900.c"
 #define	PLATFORM_DRIVER		ehci_hcd_w90x900_driver
@@ -1176,6 +1174,8 @@ MODULE_LICENSE ("GPL");
     !defined(XILINX_OF_PLATFORM_DRIVER)
 #error "missing bus glue for ehci-hcd"
 #endif
+
+#undef DEBUG
 
 static int __init ehci_hcd_init(void)
 {

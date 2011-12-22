@@ -17,6 +17,10 @@
 #include <linux/delay.h>
 #include <linux/module.h>
 
+#if defined(CONFIG_MSM_SMD0_WQ)
+extern struct workqueue_struct *tty_wq;
+#endif
+
 /**
  *	tty_buffer_free_all		-	free buffers used by a tty
  *	@tty: tty to free from
@@ -322,6 +326,11 @@ void tty_schedule_flip(struct tty_struct *tty)
 	if (tty->buf.tail != NULL)
 		tty->buf.tail->commit = tty->buf.tail->used;
 	spin_unlock_irqrestore(&tty->buf.lock, flags);
+#if defined(CONFIG_MSM_SMD0_WQ)
+	if (!strcmp(tty->name, "smd0"))
+		queue_delayed_work(tty_wq, &tty->buf.work, 0);
+	else
+#endif
 	schedule_delayed_work(&tty->buf.work, 1);
 }
 EXPORT_SYMBOL(tty_schedule_flip);
@@ -443,6 +452,11 @@ static void flush_to_ldisc(struct work_struct *work)
 			if (test_bit(TTY_FLUSHPENDING, &tty->flags))
 				break;
 			if (!tty->receive_room || seen_tail) {
+#if defined(CONFIG_MSM_SMD0_WQ)
+				if (!strcmp(tty->name, "smd0"))
+					queue_delayed_work(tty_wq, &tty->buf.work, 0);
+				else
+#endif
 				schedule_delayed_work(&tty->buf.work, 1);
 				break;
 			}
@@ -496,7 +510,6 @@ void tty_flush_to_ldisc(struct tty_struct *tty)
  *
  *	Locking: tty buffer lock. Driver locks in low latency mode.
  */
-
 void tty_flip_buffer_push(struct tty_struct *tty)
 {
 	unsigned long flags;
@@ -508,7 +521,14 @@ void tty_flip_buffer_push(struct tty_struct *tty)
 	if (tty->low_latency)
 		flush_to_ldisc(&tty->buf.work.work);
 	else
+	{
+#if defined(CONFIG_MSM_SMD0_WQ)
+		if (!strcmp(tty->name, "smd0"))
+			queue_delayed_work(tty_wq, &tty->buf.work, 0);
+		else
+#endif
 		schedule_delayed_work(&tty->buf.work, 1);
+	}
 }
 EXPORT_SYMBOL(tty_flip_buffer_push);
 

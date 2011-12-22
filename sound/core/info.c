@@ -598,7 +598,7 @@ int __exit snd_info_done(void)
  */
 int snd_info_card_create(struct snd_card *card)
 {
-	char str[8];
+	char str[16];
 	struct snd_info_entry *entry;
 
 	if (snd_BUG_ON(!card))

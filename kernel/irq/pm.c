@@ -9,6 +9,7 @@
 #include <linux/irq.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
+#include <linux/resume-trace.h>
 
 #include "internals.h"
 
@@ -29,6 +30,9 @@ void suspend_device_irqs(void)
 		unsigned long flags;
 
 		raw_spin_lock_irqsave(&desc->lock, flags);
+#ifndef CONFIG_ARCH_MSM8X60
+		if (desc->wake_depth == 0)
+#endif
 		__disable_irq(desc, irq, true);
 		raw_spin_unlock_irqrestore(&desc->lock, flags);
 	}
@@ -50,7 +54,7 @@ void resume_device_irqs(void)
 	struct irq_desc *desc;
 	int irq;
 
-	for_each_irq_desc(irq, desc) {
+	for_each_irq_desc_reverse(irq, desc) {
 		unsigned long flags;
 
 		if (!(desc->status & IRQ_SUSPENDED))
@@ -72,8 +76,11 @@ int check_wakeup_irqs(void)
 	int irq;
 
 	for_each_irq_desc(irq, desc)
-		if ((desc->status & IRQ_WAKEUP) && (desc->status & IRQ_PENDING))
+		if ((desc->status & IRQ_WAKEUP) && (desc->status & IRQ_PENDING)) {
+			TRACE_MASK(TRACE_PM_WARN,
+				"%s: %d is wakeup irq and pending\n", __func__, irq);
 			return -EBUSY;
+		}
 
 	return 0;
 }

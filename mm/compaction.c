@@ -264,7 +264,7 @@ static unsigned long isolate_migratepages(struct zone *zone,
 	spin_lock_irq(&zone->lru_lock);
 	for (; low_pfn < end_pfn; low_pfn++) {
 		struct page *page;
-		if (!pfn_valid_within(low_pfn))
+		if (!pfn_valid(low_pfn))
 			continue;
 
 		/* Get the page and skip if free */
@@ -279,7 +279,6 @@ static unsigned long isolate_migratepages(struct zone *zone,
 		/* Successfully isolated */
 		del_page_from_lru_list(zone, page, page_lru(page));
 		list_add(&page->lru, migratelist);
-		mem_cgroup_del_lru(page);
 		cc->nr_migratepages++;
 
 		/* Avoid isolating too much */
@@ -461,7 +460,7 @@ unsigned long try_to_compact_pages(struct zonelist *zonelist,
 	 * made because an assumption is made that the page allocator can satisfy
 	 * the "cheaper" orders without taking special steps
 	 */
-	if (order <= PAGE_ALLOC_COSTLY_ORDER || !may_enter_fs || !may_perform_io)
+	if (!order || !may_enter_fs || !may_perform_io)
 		return rc;
 
 	count_vm_event(COMPACTSTALL);

@@ -136,8 +136,12 @@ int __cpuinit __cpu_up(unsigned int cpu)
 			barrier();
 		}
 
-		if (!cpu_online(cpu))
+		if (!cpu_online(cpu)) {
+			pr_crit("CPU%u: failed to come online\n", cpu);
 			ret = -EIO;
+	}
+	} else {
+		pr_err("CPU%u: failed to boot: %d\n", cpu, ret);
 	}
 
 	secondary_data.stack = NULL;
@@ -146,14 +150,6 @@ int __cpuinit __cpu_up(unsigned int cpu)
 	*pmd = __pmd(0);
 	clean_pmd_entry(pmd);
 	pgd_free(&init_mm, pgd);
-
-	if (ret) {
-		printk(KERN_CRIT "CPU%u: processor failed to boot\n", cpu);
-
-		/*
-		 * FIXME: We need to clean up the new idle thread. --rmk
-		 */
-	}
 
 	return ret;
 }
@@ -256,6 +252,7 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 {
 	struct mm_struct *mm = &init_mm;
 	unsigned int cpu = smp_processor_id();
+	struct cpuinfo_arm *ci = &per_cpu(cpu_data, cpu);
 
 	printk("CPU%u: Booted secondary processor\n", cpu);
 
@@ -291,9 +288,10 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	 */
 	percpu_timer_setup();
 
+	if (!ci->loops_per_jiffy) {
 	calibrate_delay();
-
 	smp_store_cpu_info(cpu);
+	}
 
 	/*
 	 * OK, now it's safe to let the boot CPU continue
@@ -553,6 +551,10 @@ asmlinkage void __exception do_IPI(struct pt_regs *regs)
 
 void smp_send_reschedule(int cpu)
 {
+	if (unlikely(cpu_is_offline(cpu))) {
+		return;
+	}
+
 	send_ipi_message(cpumask_of(cpu), IPI_RESCHEDULE);
 }
 
@@ -560,6 +562,7 @@ void smp_send_stop(void)
 {
 	cpumask_t mask = cpu_online_map;
 	cpu_clear(smp_processor_id(), mask);
+	if (!cpus_empty(mask))
 	send_ipi_message(&mask, IPI_CPU_STOP);
 }
 

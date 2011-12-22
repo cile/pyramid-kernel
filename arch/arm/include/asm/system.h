@@ -64,6 +64,8 @@
 
 #define __exception	__attribute__((section(".exception.text")))
 
+void cpu_idle_wait(void);
+
 struct thread_info;
 struct task_struct;
 
@@ -72,6 +74,8 @@ extern unsigned int system_rev;
 extern unsigned int system_serial_low;
 extern unsigned int system_serial_high;
 extern unsigned int mem_fclk_21285;
+extern char microp_ver[4];
+extern unsigned int als_kadc;
 
 struct pt_regs;
 

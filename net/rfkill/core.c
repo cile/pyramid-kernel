@@ -593,6 +593,8 @@ static const char *rfkill_get_type_str(enum rfkill_type type)
 		return "wimax";
 	case RFKILL_TYPE_WWAN:
 		return "wwan";
+	case RFKILL_TYPE_FMTX:
+		return "fmtx";
 	case RFKILL_TYPE_GPS:
 		return "gps";
 	case RFKILL_TYPE_FM:
@@ -783,6 +785,7 @@ void rfkill_pause_polling(struct rfkill *rfkill)
 }
 EXPORT_SYMBOL(rfkill_pause_polling);
 
+#ifdef CONFIG_RFKILL_PM
 void rfkill_resume_polling(struct rfkill *rfkill)
 {
 	BUG_ON(!rfkill);
@@ -817,14 +820,17 @@ static int rfkill_resume(struct device *dev)
 
 	return 0;
 }
+#endif
 
 static struct class rfkill_class = {
 	.name		= "rfkill",
 	.dev_release	= rfkill_release,
 	.dev_attrs	= rfkill_dev_attrs,
 	.dev_uevent	= rfkill_dev_uevent,
+#ifdef CONFIG_RFKILL_PM
 	.suspend	= rfkill_suspend,
 	.resume		= rfkill_resume,
+#endif
 };
 
 bool rfkill_blocked(struct rfkill *rfkill)

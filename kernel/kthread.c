@@ -166,8 +166,8 @@ void kthread_bind(struct task_struct *p, unsigned int cpu)
 		return;
 	}
 
-	p->cpus_allowed = cpumask_of_cpu(cpu);
-	p->rt.nr_cpus_allowed = 1;
+	/* It's safe because the task is inactive. */
+	do_set_cpus_allowed(p, cpumask_of(cpu));
 	p->flags |= PF_THREAD_BOUND;
 }
 EXPORT_SYMBOL(kthread_bind);
@@ -200,7 +200,10 @@ int kthread_stop(struct task_struct *k)
 	if (k->vfork_done != NULL) {
 		kthread->should_stop = 1;
 		wake_up_process(k);
-		wait_for_completion(&kthread->exited);
+		while (!wait_for_completion_timeout(&kthread->exited, 5 * HZ)) {
+			printk("%s: try to stop %s for more than 5s!\n", __FUNCTION__, k->comm);
+			sched_show_task(k);
+		}
 	}
 	ret = k->exit_code;
 

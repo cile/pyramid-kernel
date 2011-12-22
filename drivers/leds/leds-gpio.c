@@ -52,6 +52,7 @@ static void gpio_led_set(struct led_classdev *led_cdev,
 		container_of(led_cdev, struct gpio_led_data, cdev);
 	int level;
 
+
 	if (value == LED_OFF)
 		level = 0;
 	else
@@ -104,8 +105,14 @@ static int __devinit create_gpio_led(const struct gpio_led *template,
 	}
 
 	ret = gpio_request(template->gpio, template->name);
-	if (ret < 0)
+	if(ret==(-EBUSY)){
+		printk(KERN_WARNING "%s gpio %d (%s) is requested\n",__func__,template->gpio,template->name);
+	}
+	else if (ret < 0){
+		printk(KERN_INFO "fail to request gpio %d (%s)\n",
+				template->gpio, template->name);
 		return ret;
+	}
 
 	led_dat->cdev.name = template->name;
 	led_dat->cdev.default_trigger = template->default_trigger;
@@ -125,6 +132,7 @@ static int __devinit create_gpio_led(const struct gpio_led *template,
 	led_dat->cdev.brightness = state ? LED_FULL : LED_OFF;
 	if (!template->retain_state_suspended)
 		led_dat->cdev.flags |= LED_CORE_SUSPENDRESUME;
+
 
 	ret = gpio_direction_output(led_dat->gpio, led_dat->active_low ^ state);
 	if (ret < 0)

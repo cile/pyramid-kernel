@@ -39,6 +39,9 @@
 #include <linux/kmod.h>
 #include <linux/nsproxy.h>
 
+#if defined(CONFIG_MSM_SMD0_WQ)
+extern struct workqueue_struct *tty_wq;
+#endif
 /*
  *	This guards the refcounted line discipline lists. The lock
  *	must be taken with irqs off because there are hangup path
@@ -651,6 +654,11 @@ int tty_set_ldisc(struct tty_struct *tty, int ldisc)
 
 	mutex_unlock(&tty->ldisc_mutex);
 
+#if defined(CONFIG_MSM_SMD0_WQ)
+	if (!strcmp(tty->name, "smd0"))
+		flush_workqueue(tty_wq);
+	else
+#endif
 	flush_scheduled_work();
 
 	retval = tty_ldisc_wait_idle(tty);
@@ -709,9 +717,23 @@ enable:
 	/* Restart the work queue in case no characters kick it off. Safe if
 	   already running */
 	if (work)
+	{
+#if defined(CONFIG_MSM_SMD0_WQ)
+		if (!strcmp(tty->name, "smd0"))
+			queue_delayed_work(tty_wq, &tty->buf.work, 0);
+		else
+#endif
 		schedule_delayed_work(&tty->buf.work, 1);
+	}
 	if (o_work)
+	{
+#if defined(CONFIG_MSM_SMD0_WQ)
+		if (!strcmp(o_tty->name, "smd0"))
+			queue_delayed_work(tty_wq, &o_tty->buf.work, 0);
+		else
+#endif
 		schedule_delayed_work(&o_tty->buf.work, 1);
+	}
 	mutex_unlock(&tty->ldisc_mutex);
 	unlock_kernel();
 	return retval;
@@ -889,6 +911,11 @@ void tty_ldisc_release(struct tty_struct *tty, struct tty_struct *o_tty)
 	 */
 
 	tty_ldisc_halt(tty);
+#if defined(CONFIG_MSM_SMD0_WQ)
+	if (!strcmp(tty->name, "smd0"))
+		flush_workqueue(tty_wq);
+	else
+#endif
 	flush_scheduled_work();
 
 	mutex_lock(&tty->ldisc_mutex);

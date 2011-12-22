@@ -129,6 +129,8 @@ static struct snd_minor *autoload_device(unsigned int minor)
 	if (dev == SNDRV_MINOR_CONTROL) {
 		/* /dev/aloadC? */
 		int card = SNDRV_MINOR_CARD(minor);
+		if (card < 0 || card >= SNDRV_CARDS)
+			return NULL;
 		if (snd_cards[card] == NULL)
 			snd_request_card(card);
 	} else if (dev == SNDRV_MINOR_GLOBAL) {
@@ -213,7 +215,11 @@ static int snd_kernel_minor(int type, struct snd_card *card, int dev)
 		minor = type;
 		break;
 	case SNDRV_DEVICE_TYPE_CONTROL:
+#if defined(CONFIG_SND_DEBUG)
 		if (snd_BUG_ON(!card))
+#else
+		if (!card)
+#endif
 			return -EINVAL;
 		minor = SNDRV_MINOR(card->number, type);
 		break;
@@ -221,7 +227,11 @@ static int snd_kernel_minor(int type, struct snd_card *card, int dev)
 	case SNDRV_DEVICE_TYPE_RAWMIDI:
 	case SNDRV_DEVICE_TYPE_PCM_PLAYBACK:
 	case SNDRV_DEVICE_TYPE_PCM_CAPTURE:
+#if defined(CONFIG_SND_DEBUG)
 		if (snd_BUG_ON(!card))
+#else
+		if (!card)
+#endif
 			return -EINVAL;
 		minor = SNDRV_MINOR(card->number, type + dev);
 		break;
@@ -332,7 +342,7 @@ int snd_unregister_device(int type, struct snd_card *card, int dev)
 
 	mutex_lock(&sound_mutex);
 	minor = find_snd_minor(type, card, dev);
-	if (minor < 0) {
+	if (minor < 0 || minor >= SNDRV_OS_MINORS) {
 		mutex_unlock(&sound_mutex);
 		return -EINVAL;
 	}
@@ -355,7 +365,8 @@ int snd_add_device_sysfs_file(int type, struct snd_card *card, int dev,
 
 	mutex_lock(&sound_mutex);
 	minor = find_snd_minor(type, card, dev);
-	if (minor >= 0 && (d = snd_minors[minor]->dev) != NULL)
+	if (minor >= 0 && minor < SNDRV_OS_MINORS &&
+	    (d = snd_minors[minor]->dev) != NULL)
 		ret = device_create_file(d, attr);
 	mutex_unlock(&sound_mutex);
 	return ret;

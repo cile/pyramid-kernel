@@ -17,6 +17,12 @@
 #include <linux/backing-dev.h>
 #include "internal.h"
 
+
+#ifdef CONFIG_SYS_SYNC_BLOCKING_DEBUG
+#define SYS_SYNC_TIMEOUT (3*HZ)
+static int sys_sync_done;
+#endif
+
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
 			SYNC_FILE_RANGE_WAIT_AFTER)
 
@@ -400,4 +406,62 @@ asmlinkage long SyS_sync_file_range2(long fd, long flags,
 				     offset, nbytes);
 }
 SYSCALL_ALIAS(sys_sync_file_range2, SyS_sync_file_range2);
+#endif
+
+#ifdef CONFIG_SYS_SYNC_BLOCKING_DEBUG
+#if defined(CONFIG_ARCH_MSM8X60)
+	extern int msm_watchdog_suspend(void);
+	extern int msm_watchdog_resume(void);
+	extern void wtd_dump_irqs(unsigned int dump);
+#endif
+static void sync_timeout_handler(unsigned long data)
+{
+#if defined(CONFIG_ARCH_MSM8X60)
+	struct task_struct *tsk;
+#endif
+	if (sys_sync_done == 0) {
+		pr_info("sys_sync time is too long(more than 3 seconds)");
+#if defined(CONFIG_ARCH_MSM8X60)
+		/* Suspend wdog until all stacks are printed */
+		msm_watchdog_suspend();
+
+		/* Dump PC, LR, and registers. */
+		sysfs_printk_last_file();
+		print_modules();
+		//__show_regs(get_irq_regs());
+
+		wtd_dump_irqs(1);
+
+		dump_stack();
+
+		printk(KERN_INFO "%s : Stack trace dump:\n", __func__);
+
+		for_each_process(tsk) {
+			printk(KERN_INFO "\nPID: %d, Name: %s\n",
+				tsk->pid, tsk->comm);
+			show_stack(tsk, NULL);
+		}
+
+		/* HTC changes: show blocked processes to debug hang problems */
+		printk(KERN_INFO "\n### Show Blocked State ###\n");
+		show_state_filter(TASK_UNINTERRUPTIBLE);
+		print_workqueue();
+
+		msm_watchdog_resume();
+#else
+		show_state_filter(TASK_UNINTERRUPTIBLE);
+#endif
+	}
+}
+
+static DEFINE_TIMER(sys_sync_timer, sync_timeout_handler, 0, 0);
+
+void sys_sync_debug(void)
+{
+	mod_timer(&sys_sync_timer, jiffies + SYS_SYNC_TIMEOUT);
+	sys_sync_done = 0;
+	sys_sync();
+	sys_sync_done = 1;
+	del_timer(&sys_sync_timer);
+}
 #endif

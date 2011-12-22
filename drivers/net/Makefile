@@ -104,6 +104,7 @@ obj-$(CONFIG_ADAPTEC_STARFIRE) += starfire.o
 obj-$(CONFIG_RIONET) += rionet.o
 obj-$(CONFIG_SH_ETH) += sh_eth.o
 obj-$(CONFIG_STMMAC_ETH) += stmmac/
+obj-$(CONFIG_KINETO_GAN) += kineto_gan.o
 
 #
 # end link order section
@@ -162,6 +163,8 @@ obj-$(CONFIG_PPP_BSDCOMP) += bsd_comp.o
 obj-$(CONFIG_PPP_MPPE) += ppp_mppe.o
 obj-$(CONFIG_PPPOE) += pppox.o pppoe.o
 obj-$(CONFIG_PPPOL2TP) += pppox.o
+obj-$(CONFIG_PPPOLAC) += pppox.o pppolac.o
+obj-$(CONFIG_PPPOPNS) += pppox.o pppopns.o
 
 obj-$(CONFIG_SLIP) += slip.o
 obj-$(CONFIG_SLHC) += slhc.o
@@ -287,6 +290,17 @@ obj-$(CONFIG_NETCONSOLE) += netconsole.o
 obj-$(CONFIG_FS_ENET) += fs_enet/
 
 obj-$(CONFIG_NETXEN_NIC) += netxen/
+
+ifdef CONFIG_ARCH_MSM8X60
+obj-$(CONFIG_MSM_RMNET) += msm_rmnet-8x60.o
+obj-$(CONFIG_ARCH_MSM8X60_LTE) += 8x60-lte/
+else
+ifndef CONFIG_ARCH_MSM7X30_LTE
+obj-$(CONFIG_MSM_RMNET) += msm_rmnet.o
+else
+obj-$(CONFIG_ARCH_MSM7X30_LTE) += 7x30-lte/
+endif
+endif
 obj-$(CONFIG_NIU) += niu.o
 obj-$(CONFIG_VIRTIO_NET) += virtio_net.o
 obj-$(CONFIG_SFC) += sfc/

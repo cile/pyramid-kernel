@@ -25,6 +25,8 @@
 #include <asm/atomic.h>
 #include <asm/device.h>
 
+#define BUS_ID_SIZE		20
+
 struct device;
 struct device_private;
 struct device_driver;
@@ -408,6 +410,7 @@ struct device {
 	struct device_private	*p;
 
 	struct kobject kobj;
+	char	bus_id[BUS_ID_SIZE];	/* position on parent bus */
 	const char		*init_name; /* initial name of the device */
 	struct device_type	*type;
 

@@ -105,6 +105,10 @@
 #include <linux/sockios.h>
 #include <linux/atalk.h>
 
+#ifdef CONFIG_UID_STAT
+#include <linux/uid_stat.h>
+#endif
+
 static int sock_no_open(struct inode *irrelevant, struct file *dontcare);
 static ssize_t sock_aio_read(struct kiocb *iocb, const struct iovec *iov,
 			 unsigned long nr_segs, loff_t pos);
@@ -520,8 +524,16 @@ const struct file_operations bad_sock_fops = {
  *	an inode not a file.
  */
 
+#if !defined(CONFIG_ARCH_MSM7X30_LTE) && !defined(CONFIG_ARCH_MSM8X60_LTE)
+int add_or_remove_port(struct sock *sk, int add_or_remove);
+#endif
 void sock_release(struct socket *sock)
 {
+#if !defined(CONFIG_ARCH_MSM7X30_LTE) && !defined(CONFIG_ARCH_MSM8X60_LTE)
+	if (sock->sk != NULL)
+		add_or_remove_port(sock->sk, 0);
+#endif
+
 	if (sock->ops) {
 		struct module *owner = sock->ops->owner;
 
@@ -570,7 +582,12 @@ static inline int __sock_sendmsg(struct kiocb *iocb, struct socket *sock,
 	if (err)
 		return err;
 
-	return sock->ops->sendmsg(iocb, sock, msg, size);
+	err = sock->ops->sendmsg(iocb, sock, msg, size);
+#ifdef CONFIG_UID_STAT
+	if (err > 0)
+		uid_stat_tcp_snd(current_uid(), err);
+#endif
+	return err;
 }
 
 int sock_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
@@ -685,6 +702,7 @@ EXPORT_SYMBOL_GPL(__sock_recv_ts_and_drops);
 static inline int __sock_recvmsg_nosec(struct kiocb *iocb, struct socket *sock,
 				       struct msghdr *msg, size_t size, int flags)
 {
+	int err;
 	struct sock_iocb *si = kiocb_to_siocb(iocb);
 
 	sock_update_classid(sock->sk);
@@ -695,7 +713,12 @@ static inline int __sock_recvmsg_nosec(struct kiocb *iocb, struct socket *sock,
 	si->size = size;
 	si->flags = flags;
 
-	return sock->ops->recvmsg(iocb, sock, msg, size, flags);
+	err = sock->ops->recvmsg(iocb, sock, msg, size, flags);
+#ifdef CONFIG_UID_STAT
+	if (err > 0)
+		uid_stat_tcp_rcv(current_uid(), err);
+#endif
+	return err;
 }
 
 static inline int __sock_recvmsg(struct kiocb *iocb, struct socket *sock,
@@ -1439,6 +1462,10 @@ SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 			err = sock->ops->listen(sock, backlog);
 
 		fput_light(sock->file, fput_needed);
+#if !defined(CONFIG_ARCH_MSM7X30_LTE) && !defined(CONFIG_ARCH_MSM8X60_LTE)
+		if (sock->sk != NULL)
+			add_or_remove_port(sock->sk, 1);
+#endif
 	}
 	return err;
 }

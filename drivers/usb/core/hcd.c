@@ -870,6 +870,9 @@ static void usb_bus_init (struct usb_bus *bus)
 	bus->bandwidth_isoc_reqs = 0;
 
 	INIT_LIST_HEAD (&bus->bus_list);
+#ifdef CONFIG_USB_OTG
+	INIT_DELAYED_WORK(&bus->hnp_polling, usb_hnp_polling_work);
+#endif
 }
 
 /*-------------------------------------------------------------------------*/
@@ -899,6 +902,11 @@ static int usb_register_bus(struct usb_bus *bus)
 	/* Add it to the local list of buses */
 	list_add (&bus->bus_list, &usb_bus_list);
 	mutex_unlock(&usb_bus_list_lock);
+#ifdef CONFIG_USB_OTG
+	/* Obvioulsy HNP is supported on B-host */
+	if (bus->is_b_host)
+		bus->hnp_support = 1;
+#endif
 
 	usb_notify_add_bus(bus);
 
@@ -1548,6 +1556,8 @@ void usb_hcd_giveback_urb(struct usb_hcd *hcd, struct urb *urb, int status)
 	usb_unanchor_urb(urb);
 
 	/* pass ownership to the completion handler */
+	if (status)
+		printk(KERN_INFO "[USBH] %s: status = %d\n", __func__, status);
 	urb->status = status;
 	urb->complete (urb);
 	atomic_dec (&urb->use_count);
@@ -1874,7 +1884,7 @@ void usb_free_streams(struct usb_interface *interface,
 
 	/* Streams only apply to bulk endpoints. */
 	for (i = 0; i < num_eps; i++)
-		if (!eps[i] || !usb_endpoint_xfer_bulk(&eps[i]->desc))
+		if (!usb_endpoint_xfer_bulk(&eps[i]->desc))
 			return;
 
 	hcd->driver->free_streams(hcd, dev, eps, num_eps, mem_flags);
@@ -2291,6 +2301,8 @@ int usb_add_hcd(struct usb_hcd *hcd,
 
 	/* starting here, usbcore will pay attention to this root hub */
 	rhdev->bus_mA = min(500u, hcd->power_budget);
+	printk(KERN_INFO "[OTG] set power:%d (budget:%d)\n", rhdev->bus_mA,
+			hcd->power_budget);
 	if ((retval = register_root_hub(hcd)) != 0)
 		goto err_register_root_hub;
 

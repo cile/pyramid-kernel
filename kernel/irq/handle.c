@@ -370,6 +370,9 @@ irqreturn_t handle_IRQ_event(unsigned int irq, struct irqaction *action)
 	irqreturn_t ret, retval = IRQ_NONE;
 	unsigned int status = 0;
 
+#ifdef CONFIG_ARCH_MSM8X60
+	update_handle_irqs_this_cpu(irq);
+#endif
 	do {
 		trace_irq_handler_entry(irq, action);
 		ret = action->handler(irq, action->dev_id);
@@ -422,6 +425,10 @@ irqreturn_t handle_IRQ_event(unsigned int irq, struct irqaction *action)
 	if (status & IRQF_SAMPLE_RANDOM)
 		add_interrupt_randomness(irq);
 	local_irq_disable();
+
+#ifdef CONFIG_ARCH_MSM8X60
+	release_handle_irqs_this_cpu(irq);
+#endif
 
 	return retval;
 }

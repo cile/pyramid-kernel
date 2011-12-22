@@ -22,6 +22,10 @@
 #include "sdio_cis.h"
 #include "bus.h"
 
+#ifdef CONFIG_SDIO_CES
+#include <linux/proc_fs.h>
+#endif
+
 #define dev_to_mmc_card(d)	container_of(d, struct mmc_card, dev)
 #define to_mmc_driver(d)	container_of(d, struct mmc_driver, drv)
 
@@ -217,6 +221,34 @@ struct mmc_card *mmc_alloc_card(struct mmc_host *host, struct device_type *type)
 	return card;
 }
 
+#ifdef CONFIG_SDIO_CES
+int sdio_create_file=0;
+
+static struct proc_dir_entry *sdio_detection=NULL;
+
+static int sdio_detection_read_proc(char *page, char **start, off_t off,
+                            int count, int *eof, void *data)
+{
+    unsigned char *ptr="1";
+
+    memcpy(page, ptr, 1);
+    return 1;
+}
+
+static void create_sdio_detection_proc(void)
+{
+    sdio_detection = create_proc_entry("sdio_detection", 0444, NULL);
+
+    if (sdio_detection != NULL) {
+        printk("SDIO_CES: create proc OK!\n");
+        sdio_detection->size = 1;
+        sdio_detection->read_proc = sdio_detection_read_proc;
+        sdio_detection->write_proc = NULL;
+    } else
+        printk("SDIO_CES: create proc fail!\n");
+
+}
+#endif
 /*
  * Register a new MMC card with the driver model.
  */
@@ -226,6 +258,7 @@ int mmc_add_card(struct mmc_card *card)
 	const char *type;
 
 	dev_set_name(&card->dev, "%s:%04x", mmc_hostname(card->host), card->rca);
+	card->removed = 0;
 
 	switch (card->type) {
 	case MMC_TYPE_MMC:
@@ -238,6 +271,12 @@ int mmc_add_card(struct mmc_card *card)
 		break;
 	case MMC_TYPE_SDIO:
 		type = "SDIO";
+		break;
+	case MMC_TYPE_SDIO_WIMAX:
+		type = "SDIO(WiMAX)";
+		break;
+	case MMC_TYPE_SDIO_SVLTE:
+		type = "SDIO(SVLTE)";
 		break;
 	default:
 		type = "?";
@@ -254,6 +293,12 @@ int mmc_add_card(struct mmc_card *card)
 			mmc_hostname(card->host),
 			mmc_card_highspeed(card) ? "high speed " : "",
 			type, card->rca);
+#ifdef CONFIG_SDIO_CES
+        if((card->type == MMC_TYPE_SDIO) && (sdio_create_file == 0)){
+            sdio_create_file=1;
+            create_sdio_detection_proc();
+        }
+#endif
 	}
 
 	ret = device_add(&card->dev);
@@ -275,6 +320,8 @@ int mmc_add_card(struct mmc_card *card)
  */
 void mmc_remove_card(struct mmc_card *card)
 {
+	if (mmc_card_sd(card))
+		card->removed = 1;
 #ifdef CONFIG_DEBUG_FS
 	mmc_remove_card_debugfs(card);
 #endif
@@ -286,6 +333,13 @@ void mmc_remove_card(struct mmc_card *card)
 		} else {
 			printk(KERN_INFO "%s: card %04x removed\n",
 				mmc_hostname(card->host), card->rca);
+#ifdef CONFIG_SDIO_CES
+            if((card->type == MMC_TYPE_SDIO) && (sdio_create_file == 1)){
+                sdio_create_file=0;
+                remove_proc_entry("sdio_detection", NULL);
+                printk("SDIO_CES: remove /proc/sdio_detection\n");
+            }
+#endif
 		}
 		device_del(&card->dev);
 	}

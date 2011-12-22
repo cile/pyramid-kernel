@@ -107,6 +107,10 @@
 #include <linux/kmod.h>
 #include <linux/nsproxy.h>
 
+#if defined(CONFIG_MSM_SMD0_WQ)
+struct workqueue_struct *tty_wq;
+#endif
+
 #undef TTY_DEBUG_HANGUP
 
 #define TTY_PARANOIA_CHECK 1
@@ -3143,6 +3147,10 @@ int __init tty_init(void)
 		panic("Couldn't register /dev/console driver\n");
 	device_create(tty_class, NULL, MKDEV(TTYAUX_MAJOR, 1), NULL,
 			      "console");
+#if defined(CONFIG_MSM_SMD0_WQ)
+	tty_wq = create_workqueue("tty_smd0");
+	printk(KERN_DEBUG "[TTY_IO] create tty_wq for smd0\n");
+#endif
 
 #ifdef CONFIG_VT
 	vty_init(&console_fops);

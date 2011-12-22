@@ -604,7 +604,7 @@ static int snd_ctl_elem_list(struct snd_card *card,
 	space = list.space;
 	first = 0;
 	/* try limit maximum space */
-	if (space > 16384)
+	if (space > 65535)
 		return -ENOMEM;
 	if (space > 0) {
 		/* allocate temporary buffer for atomic operation */
@@ -1100,7 +1100,7 @@ static int snd_ctl_tlv_ioctl(struct snd_ctl_file *file,
                              struct snd_ctl_tlv __user *_tlv,
                              int op_flag)
 {
-	struct snd_card *card = file->card;
+	struct snd_card *card;
 	struct snd_ctl_tlv tlv;
 	struct snd_kcontrol *kctl;
 	struct snd_kcontrol_volatile *vd;
@@ -1111,6 +1111,9 @@ static int snd_ctl_tlv_ioctl(struct snd_ctl_file *file,
 		return -EFAULT;
 	if (tlv.length < sizeof(unsigned int) * 2)
 		return -EINVAL;
+	if (file == NULL)
+		return -EINVAL;
+	card = file->card;
 	down_read(&card->controls_rwsem);
 	kctl = snd_ctl_find_numid(card, tlv.numid);
 	if (kctl == NULL) {

@@ -439,12 +439,8 @@ xpc_discovery(void)
 	 * nodes that can comprise an access protection grouping. The access
 	 * protection is in regards to memory, IOI and IPI.
 	 */
-	region_size = xp_region_size;
-
-	if (is_uv())
-		max_regions = 256;
-	else {
 		max_regions = 64;
+	region_size = xp_region_size;
 
 		switch (region_size) {
 		case 128:
@@ -456,7 +452,6 @@ xpc_discovery(void)
 			region_size = 16;
 			DBUG_ON(!is_shub2());
 		}
-	}
 
 	for (region = 0; region < max_regions; region++) {
 
