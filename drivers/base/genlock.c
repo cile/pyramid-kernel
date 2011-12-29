@@ -10,6 +10,7 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/interrupt.h>
 #include <linux/fb.h>
 #include <linux/slab.h>
 #include <linux/module.h>
