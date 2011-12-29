@@ -52,6 +52,8 @@
 #define MSMFB_OVERLAY_PLAY_WAIT _IOWR(MSMFB_IOCTL_MAGIC, 149, \
                                                 struct msmfb_overlay_data)
 
+#define FB_TYPE_3D_PANEL 0x10101010
+
 enum {
 	MDP_RGB_565,      // RGB 565 planer
 	MDP_XRGB_8888,    // RGB 888 padded
